@@ -1,0 +1,61 @@
+require "selenium/webdriver"
+
+JSConsoleError = Class.new(StandardError)
+
+Capybara.register_driver :selenium_chrome do |app|
+  Capybara::Selenium::Driver.new(app, browser: :chrome)
+end
+
+Capybara.register_driver :selenium_chrome_headless do |app|
+  browser_options = Selenium::WebDriver::Chrome::Options.new
+  browser_options.add_argument("window-size=1240,1400")
+  browser_options.add_argument("--headless")
+  browser_options.add_argument("--disable-gpu")
+  browser_options.add_argument("--no-sandbox")
+
+  # This enables access to logs with `page.driver.manage.get_log(:browser)`
+  capabilities = Selenium::WebDriver::Remote::Capabilities.chrome(
+    loggingPrefs: {
+      browser: "ALL",
+      client: "ALL",
+      driver: "ALL",
+      server: "ALL"
+    }
+  )
+
+  Capybara::Selenium::Driver.new(
+    app,
+    browser: :chrome,
+    options: browser_options,
+    desired_capabilities: capabilities
+  )
+end
+
+Capybara.javascript_driver = :selenium_chrome_headless
+
+RSpec.configure do |config|
+  config.before(:each, type: :system) do
+    driven_by :rack_test
+
+    # Silent puma server http://bit.ly/2HNiv4R
+    Capybara.server = :puma, { Silent: true }
+  end
+
+  config.before(:each, type: :system, js: true) do
+    driven_by :selenium_chrome_headless
+  end
+
+  config.before(:each, type: :system, selenium_chrome: true) do
+    driven_by :selenium, using: :chrome
+  end
+
+  config.after(:each, type: :system, js: true) do |example|
+    if example.exception
+      console = page.driver.browser.manage.logs.get(:browser)
+      if console.present?
+        message = "Unexpected browser console output:\n" + console.map(&:message).join("\n")
+        raise JSConsoleError, message
+      end
+    end
+  end
+end
