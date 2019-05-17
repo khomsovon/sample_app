@@ -6,6 +6,8 @@ RSpec.describe StaticPagesController, type: :controller, js: true do
 
       visit static_pages_home_path
 
+      binding.pry
+
       expect(page).to have_page_title("Home")
 
     end
